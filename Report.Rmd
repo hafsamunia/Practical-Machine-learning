@@ -1,0 +1,108 @@
+---
+title: "Report"
+author: "Hafsa"
+date: "2/2/2022"
+output: html_document
+---
+#load the packages
+```{r}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+```
+#Load data
+Load the testing and training data
+
+```{r}
+training_csv<-read.csv('./pml-training.csv', header=T)
+testing_csv<-read.csv('./pml-testing.csv', header=T)
+```
+# Data partiotion
+ Data partition with set.seed=1234 and took 60% as training and 40% as testing data
+
+```{r}
+set.seed(12345)
+inTrain<-createDataPartition(y=training_csv$classe, p=0.6, list=FALSE)
+training<-training_csv[inTrain, ]
+testing<-training_csv[-inTrain, ]
+```
+#Non zero data
+Identification on Non-Zero Data and will not use those data
+
+```{r}
+all_zero_colnames <- sapply(names(testing_csv), function(x) all(is.na(testing_csv[,x])==TRUE))
+nznames <- names(all_zero_colnames)[all_zero_colnames==FALSE]
+nznames <- nznames[-(1:7)]
+nznames <- nznames[1:(length(nznames)-1)]
+nznames
+```
+
+#Cross validation
+Cross validation is done for each model with K = 3. This is set in the above code chunk using the fitControl object as defined below:
+```{r}
+fitControl <- trainControl(method='cv', number = 3)
+```
+#Model building
+The three model types I’m going to test are:
+    Decision trees with CART (rpart)
+    Stochastic gradient boosting trees (gbm)
+    Random forest decision trees (rf)
+# Decision trees with CART (rpart)
+```{r}
+mod_CART <- train(classe ~ ., data = training[, c('classe', nznames)], trControl=fitControl,method = "rpart")
+predCART <- predict(mod_CART, newdata=testing)
+cmCART <- confusionMatrix(predCART,factor(testing$classe))
+fancyRpartPlot(mod_CART$finalModel)
+plot(mod_CART)
+
+```
+
+#Stochastic gradient boosting trees (gbm)
+
+
+```{r}
+mod_gbm <- train(classe ~ ., data = training[, c('classe', nznames)], trControl=fitControl,method = "gbm")
+predgbm <- predict(mod_gbm, newdata=testing)
+cmgbm <- confusionMatrix(predgbm,factor(testing$classe))
+plot(mod_gbm)
+```
+#Random forest decision trees (rf)
+
+```{r}
+mod_rf <- train(classe ~ ., data = training[, c('classe', nznames)], trControl=fitControl,method = "rf")
+predrf <- predict(mod_rf, newdata=testing)
+cmrf <- confusionMatrix(predrf,factor(testing$classe))
+plot(mod_rf)
+```
+
+#Model assesment
+```{r}
+AccuracyResults <- data.frame(
+  Model = c('CART', 'GBM', 'RF'),
+  Accuracy = rbind(cmCART$overall[1], cmgbm$overall[1], cmrf$overall[1])
+)
+print(AccuracyResults)
+
+```
+
+Random foirest is the champion model with accuracy level 99%. 
+
+#Prediction
+As a last step in the project, I’ll use the validation data sample  (‘pml-testing.csv’) to predict a classe for each of the 20 observations  based on the other information we know about these observations contained  in the validation sample. 
+```{r}
+predValidation <- predict(mod_rf, newdata=testing_csv)
+ValidationPredictionResults <- data.frame(
+  problem_id=testing_csv$problem_id,
+  predicted=predValidation
+)
+print(ValidationPredictionResults)
+```
+
+
+#Conclusion
+Based on the data available, I am able to fit a reasonably sound model with a high degree of accuracy in predicting out of sample observations.  I limit features to those that are non-zero in the validation sample. 
+
+Despite these remaining questions on missing data in the samples, the random forest model with cross-validation produces a surprisingly accurate model that is sufficient for predictive analytics.
